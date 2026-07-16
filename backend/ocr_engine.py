@@ -3,13 +3,16 @@ OCR engine module.
 This is the same preprocessing + OCR logic prototyped in the Colab notebook,
 moved here so the FastAPI app can call it directly.
 """
-import pytesseract
-
-pytesseract.pytesseract.tesseract_cmd = r"E:\tesseract\tesseract.exe"
 import cv2
 import numpy as np
 import pytesseract
 import time
+import os
+import platform
+if platform.system() == "Windows":
+    windows_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    if os.path.exists(windows_path):
+        pytesseract.pytesseract.tesseract_cmd = windows_path
 
 
 def deskew(img):
