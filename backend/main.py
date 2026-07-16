@@ -14,6 +14,7 @@ import uuid
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from ocr_engine import extract_text
 from extractor import extract_fields
@@ -34,7 +35,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
-@app.get("/")
+@app.get("/api/status")
 def health_check():
     return {"status": "ok", "message": "Document Digitization API is running"}
 
@@ -68,3 +69,4 @@ async def extract(file: UploadFile = File(...)):
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+app.mount("/", StaticFiles(directory="static", html=True), name="static")

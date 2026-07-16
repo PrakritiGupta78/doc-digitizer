@@ -10,9 +10,14 @@ import time
 import os
 import platform
 if platform.system() == "Windows":
-    windows_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    if os.path.exists(windows_path):
-        pytesseract.pytesseract.tesseract_cmd = windows_path
+    possible_paths = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"E:\tesseract\tesseract.exe",
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            pytesseract.pytesseract.tesseract_cmd = path
+            break
 
 
 def deskew(img):

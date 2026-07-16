@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Document Digitizer</title>
+<style>
+  :root {
+    --paper: #f7f5f0;
+    --ink: #1f2a37;
+    --ink-soft: #5b6572;
+    --scan-line: #c98a3e;
+    --rule: #d8d3c7;
+    --ok-bg: #eef3ea;
+    --ok-text: #3a5a30;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Courier New', ui-monospace, monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  .sheet {
+    width: 100%;
+    max-width: 640px;
+    background: #fff;
+    border: 1px solid var(--rule);
+    box-shadow: 0 1px 0 var(--rule), 0 8px 24px rgba(31,42,55,0.06);
+  }
+  .sheet-header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px dashed var(--rule);
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--scan-line);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 26px;
+    margin: 0;
+    font-weight: normal;
+  }
+  .sub {
+    color: var(--ink-soft);
+    font-size: 13px;
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .body { padding: 28px 32px 32px; }
+
+  #dropzone {
+    border: 1.5px dashed var(--rule);
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  #dropzone:hover, #dropzone.drag {
+    border-color: var(--scan-line);
+    background: #fffaf2;
+  }
+  #dropzone p { margin: 6px 0; color: var(--ink-soft); font-size: 13px; }
+  #dropzone .main-cta { color: var(--ink); font-size: 14px; }
+  #fileInput { display: none; }
+
+  #preview {
+    margin-top: 16px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  #preview img {
+    width: 44px; height: 44px; object-fit: cover;
+    border: 1px solid var(--rule);
+  }
+
+  button#submit {
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    font-family: inherit;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  button#submit:disabled { background: #a9b0b8; cursor: not-allowed; }
+  button#submit:hover:not(:disabled) { background: #34424f; }
+
+  #status {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    min-height: 16px;
+  }
+  #status.error { color: #a13d3d; }
+
+  #result { display: none; margin-top: 24px; }
+  .field-row {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--rule);
+    font-size: 13px;
+  }
+  .field-row .label { color: var(--scan-line); text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; padding-top: 2px; }
+  .field-row .value { color: var(--ink); }
+  .field-row .value.empty { color: #b3aca0; font-style: italic; }
+
+  .raw-text-toggle {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--scan-line);
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  #rawText {
+    display: none;
+    margin-top: 10px;
+    padding: 14px;
+    background: #fafaf7;
+    border: 1px solid var(--rule);
+    font-size: 12px;
+    white-space: pre-wrap;
+    max-height: 240px;
+    overflow-y: auto;
+    color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+
+  <div class="sheet">
+    <div class="sheet-header">
+      <p class="eyebrow">Doc → Data</p>
+      <h1>Document Digitizer</h1>
+      <p class="sub">Upload a scanned invoice, receipt, or form. It's cleaned up, read with OCR, and the key fields are pulled out automatically.</p>
+    </div>
+
+    <div class="body">
+      <div id="dropzone">
+        <p class="main-cta">Click to choose a file, or drag one here</p>
+        <p>PNG, JPG, or WEBP</p>
+        <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.webp" />
+      </div>
+
+      <div id="preview">
+        <img id="previewImg" src="" alt="preview" />
+        <span id="previewName"></span>
+      </div>
+
+      <button id="submit" disabled>Extract Text</button>
+      <div id="status"></div>
+
+      <div id="result">
+        <div id="fields"></div>
+        <div class="raw-text-toggle" id="toggleRaw">Show raw OCR text</div>
+        <div id="rawText"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // Point this at your backend. Local dev default shown below;
+  // change to your deployed Render/Railway URL after Step 4.
+  const API_URL = "/extract";
+
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("fileInput");
+  const submitBtn = document.getElementById("submit");
+  const statusEl = document.getElementById("status");
+  const preview = document.getElementById("preview");
+  const previewImg = document.getElementById("previewImg");
+  const previewName = document.getElementById("previewName");
+  const resultEl = document.getElementById("result");
+  const fieldsEl = document.getElementById("fields");
+  const rawTextEl = document.getElementById("rawText");
+  const toggleRaw = document.getElementById("toggleRaw");
+
+  let selectedFile = null;
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("drag"); });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("drag");
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener("change", (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file) {
+    selectedFile = file;
+    previewImg.src = URL.createObjectURL(file);
+    previewName.textContent = file.name;
+    preview.style.display = "flex";
+    submitBtn.disabled = false;
+    statusEl.textContent = "";
+    statusEl.className = "";
+    resultEl.style.display = "none";
+  }
+
+  submitBtn.addEventListener("click", async () => {
+    console.log("Button clicked");
+    if (!selectedFile) return;
+    submitBtn.disabled = true;
+    statusEl.className = "";
+    statusEl.textContent = "Processing document…";
+    resultEl.style.display = "none";
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res = await fetch(API_URL, { method: "POST", body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Request failed (${res.status})`);
+      }
+      const data = await res.json();
+  
+      console.log("API Response:", data);
+      renderResult(data);
+      console.log("renderResult finished");
+      renderResult(data);
+      statusEl.textContent = "Done.";
+    } catch (err) {
+      statusEl.className = "error";
+      statusEl.textContent = "Error: " + err.message + " — is the backend running?";
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  function renderResult(data) {
+    fieldsEl.innerHTML = "";
+    const fields = data.extracted_fields || {};
+    Object.entries(fields).forEach(([key, value]) => {
+      const row = document.createElement("div");
+      row.className = "field-row";
+      row.innerHTML = `
+        <div class="label">${key.replace(/_/g, " ")}</div>
+        <div class="value ${value ? "" : "empty"}">${value || "not found"}</div>
+      `;
+      fieldsEl.appendChild(row);
+    });
+    rawTextEl.textContent = data.raw_text || "(no text detected)";
+    resultEl.style.display = "block";
+  }
+
+  toggleRaw.addEventListener("click", () => {
+    const showing = rawTextEl.style.display === "block";
+    rawTextEl.style.display = showing ? "none" : "block";
+    toggleRaw.textContent = showing ? "Show raw OCR text" : "Hide raw OCR text";
+  });
+</script>
+</body>
+</html>
